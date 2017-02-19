@@ -1,2 +1,2 @@
 ## Some random horribly made scripts
-<img src="works_on_my_machine.svg"></img>
+![well it might not](works_on_my_machine.svg)
