@@ -11,8 +11,8 @@ rand=$(( $RANDOM % ${#images[@]} ))
 pic=${images[$rand]}
 
 # so any menus used to lock have time to close (eg, Xfce whiskermenu)
-sleep 1 
-# ffmpeg is faster than imagemagick 
+sleep 1
+# ffmpeg is faster than imagemagick
 ffmpeg -hide_banner -v error -f x11grab -video_size 7200x1080 -i $DISPLAY \
 -vframes 1 -y "$tmpbg"
 #import -window root +repage "$tmpbg"
@@ -30,7 +30,10 @@ convert "$tmpbg" -scale 10% -scale 1000% -colorize 10% -blur 0x2 "$tmpbg"
 
 if [ -f "$pic" ]; then
     # add overlay image/logo to second screen
-	convert "$tmpbg" "$pic" -gravity northwest -geometry +1920+0 -composite -matte "$tmpbg"
+	#convert "$tmpbg" "$pic" -gravity northwest -geometry +1920+0 -composite \
+	#-matte "$tmpbg"
+	ffmpeg -hide_banner -v error -i $tmpbg -i $pic -filter_complex \
+	'overlay=1920:0' -y $tmpbg
 fi
- 
+
 i3lock -n -e -i "$tmpbg" >> /dev/null &
