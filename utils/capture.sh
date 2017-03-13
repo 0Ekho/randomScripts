@@ -13,7 +13,7 @@ if [ ! -f $folder/counter.txt ]; then
 	echo "0" > "$folder/counter.txt"
 fi
 count=`cat $folder/counter.txt`
-file_name="SF$(printf %07d $count)"
+file_name="SN$(printf %07d $count)"
 # this mess will use imagemagik to add a timestamp to the image
 timestamp()
 {
@@ -52,7 +52,7 @@ for i in "$@"; do
 	   	;;
 	   	-w|--window)
 	   		file_path="$archive/$file_name.png"
-	   		import -screen -window $(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2) +repage $file_path
+	   		import -frame -screen -window $(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2) +repage $file_path
 	   	;;
 	   	-x|--fullscreen)
 	   		file_path="$archive/$file_name.png"
@@ -112,7 +112,7 @@ if [ -e "$file_path" ]; then
 	url=`echo "$response" | grep -Po '(?<="url":").*?(?=")'`
 	# save response so can find/delete it if wanted later.
 	printf "\nFile: `readlink -f $file_path`, Time: $time_stamp, Response: $response " >> $folder/history.txt
-	echo -n $url | xclip -i -selection c
+	echo -n "$url" | xclip -i -selection c
 	notify-send -t 4000 "File Uploaded to: $url and link copied to clipboard"
 else
 	notify-send -t 4000 "Screenshot Cancelled"
