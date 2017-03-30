@@ -40,18 +40,22 @@ default=nokey=1:noprint_wrappers=1 "$1"`
             echo "Codec of file: $codec"
 			if [ "$cover_img" != "0" ]; then
 				block_picture $cover_img
+
 				ffmpeg -hide_banner -i "$1" -c copy -metadata:s:a:0 \
-TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 METADATA_BLOCK_PICTURE="`cat tmp/cover.b64`" "cleaned/$name.opus"
+TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 LANGUAGE="" \
+-metadata:s:a:0 METADATA_BLOCK_PICTURE="`cat tmp/cover.b64`" \
+"cleaned/$name.opus"
 			else
             	ffmpeg -hide_banner -i "$1" -c copy -metadata:s:a:0 \
-TITLE="$title" -metadata:s:a:0 ARTIST="$artist" "cleaned/$name.opus"
+TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 LANGUAGE="" \
+"cleaned/$name.opus"
         	fi
 		else
             echo "Codec of file: $codec"
 			# try to get bitrate of file
             b_rate_raw=`ffprobe -v error -select_streams a:0 -show_entries \
 stream=bit_rate -of default=nokey=1:noprint_wrappers=1 "$1"`
-			case $string in
+			case $b_rate_raw in
 				''|*[!0-9]*) 
 					echo "unable to determine bitrate, falling back to 192kpbs"
 					b_rate=192
@@ -64,11 +68,21 @@ stream=bit_rate -of default=nokey=1:noprint_wrappers=1 "$1"`
 			esac
 			if [ "$cover_img" != "0"  ]; then
 				block_picture $cover_img
+				#echo ";FFMETADATA1" >> tmp/metadata.txt
+				#echo "TITLE=$title" >> tmp/metadata.txt
+                #echo "ARTIST=$artist" >> tmp/metadata.txt
+				#echo -n "METADATA_BLOCK_PICTURE=" >> tmp/metadata.txt
+				#cat "tmp/cover.b64" >> tmp/metadata.txt
+				#echo "" >> tmp/metadata.txt
+				#ffmpeg -hide_banner -i "$1" -i "tmp/metadata.txt" -map_metadata 1:s:0 -b:a "$b_rate"K "cleaned/$name.opus"
 				ffmpeg -hide_banner -i "$1" -b:a "$b_rate"K -metadata:s:a:0 \
-TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 METADATA_BLOCK_PICTURE="`cat tmp/cover.b64`" "cleaned/$name.opus"
+TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 \
+METADATA_BLOCK_PICTURE="`cat tmp/cover.b64`" -metadata:s:a:0 LANGUAGE="" \
+"cleaned/$name.opus"
 			else
             	ffmpeg -hide_banner -i "$1" -b:a "$b_rate"K -metadata:s:a:0 \
-TITLE="$title" -metadata:s:a:0 ARTIST="$artist" "cleaned/$name.opus"
+TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 LANGUAGE="" \
+"cleaned/$name.opus"
 			fi
         fi
 }
@@ -119,8 +133,17 @@ if test -n "$(shopt -s nullglob; echo *.webm)"; then
 		c2opus "$item"
 	done
 fi
+if test -n "$(shopt -s nullglob; echo *.flac)"; then
+    for item in ./*.flac; do
+        c2opus "$item"
+    done
+fi
+
 # cleanup
-rm tmp/cover.hex
-rm tmp/cover.bin
-rm tmp/cover.b64
-rmdir tmp
+if [ "$cover_img" != "0"  ]; then
+	rm tmp/cover.hex
+	rm tmp/cover.bin
+	rm tmp/cover.b64
+	#rm tmp/metadata.txt
+	rmdir tmp
+fi
