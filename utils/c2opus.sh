@@ -39,8 +39,6 @@ default=nokey=1:noprint_wrappers=1 "$1"`
         if [ "`grep "opus" <<< $codec`" == "opus" ]; then
             echo "Codec of file: $codec"
 			if [ "$cover_img" != "0" ]; then
-				block_picture $cover_img
-
 				ffmpeg -hide_banner -i "$1" -c copy -metadata:s:a:0 \
 TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 LANGUAGE="" \
 -metadata:s:a:0 METADATA_BLOCK_PICTURE="`cat tmp/cover.b64`" \
@@ -67,14 +65,6 @@ stream=bit_rate -of default=nokey=1:noprint_wrappers=1 "$1"`
 				;;
 			esac
 			if [ "$cover_img" != "0"  ]; then
-				block_picture $cover_img
-				#echo ";FFMETADATA1" >> tmp/metadata.txt
-				#echo "TITLE=$title" >> tmp/metadata.txt
-                #echo "ARTIST=$artist" >> tmp/metadata.txt
-				#echo -n "METADATA_BLOCK_PICTURE=" >> tmp/metadata.txt
-				#cat "tmp/cover.b64" >> tmp/metadata.txt
-				#echo "" >> tmp/metadata.txt
-				#ffmpeg -hide_banner -i "$1" -i "tmp/metadata.txt" -map_metadata 1:s:0 -b:a "$b_rate"K "cleaned/$name.opus"
 				ffmpeg -hide_banner -i "$1" -b:a "$b_rate"K -metadata:s:a:0 \
 TITLE="$title" -metadata:s:a:0 ARTIST="$artist" -metadata:s:a:0 \
 METADATA_BLOCK_PICTURE="`cat tmp/cover.b64`" -metadata:s:a:0 LANGUAGE="" \
@@ -123,6 +113,10 @@ block_picture()
 	# convert to base 64 for use in opus file
 	base64 -w 0 < tmp/cover.bin > tmp/cover.b64
 }
+
+if [ "$cover_img" != "0" ]; then
+    block_picture $cover_img
+fi
 if test -n "$(shopt -s nullglob; echo *.mp?)"; then
 	for item in ./*.mp?; do
 		c2opus "$item"
@@ -144,6 +138,5 @@ if [ "$cover_img" != "0"  ]; then
 	rm tmp/cover.hex
 	rm tmp/cover.bin
 	rm tmp/cover.b64
-	#rm tmp/metadata.txt
 	rmdir tmp
 fi
