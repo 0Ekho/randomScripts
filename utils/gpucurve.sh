@@ -48,17 +48,21 @@ do
 		7[5-9])
 			newfanspeed="65"
 			;;
-		8[0-9])
-			newfanspeed="80"
+		8[0-3])
+			newfanspeed="70"
 			;;
-		9[0-9])
+		8[4-9])
+            newfanspeed="75"
+            ;;
+
+		9[0-5])
 			newfanspeed="90"
 			;;
 		*)
-			newfanspeed="95"
-			# sounds like computer will fly away :)
+			newfanspeed="70"
 			;;
 	esac
-	nvidia-settings -a [fan:0]/GPUTargetFanSpeed=$newfanspeed
-	sleep 5s
+	nvidia-settings -a [fan:0]/GPUTargetFanSpeed=$newfanspeed > /dev/null
+	sleep 10s
 done
+

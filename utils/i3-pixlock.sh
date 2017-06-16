@@ -3,6 +3,11 @@
 # requires imagemagick and i3lock (ffmpeg also to use the faster commands)
 # slowly adding ffmpeg to completly replace imagemagick for speed
 
+# exit if screen is already locked
+if pgrep i3-lock; then
+	exit 1
+fi
+
 tmpbg="/tmp/lockscreen.png"
 dir="$HOME/Pictures/lockscreen/"
 
