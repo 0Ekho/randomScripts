@@ -4,7 +4,7 @@
 # slowly adding ffmpeg to completly replace imagemagick for speed
 
 # exit if screen is already locked
-if pgrep i3-lock; then
+if pgrep i3lock; then
 	exit 1
 fi
 
