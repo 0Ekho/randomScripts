@@ -5,7 +5,7 @@
 
 # exit if screen is already locked
 if pgrep i3lock; then
-	exit 1
+    exit 1
 fi
 
 tmpbg="/tmp/lockscreen.png"
@@ -35,10 +35,10 @@ convert "$tmpbg" -scale 10% -scale 1000% -colorize 10% -blur 0x2 "$tmpbg"
 
 if [ -f "$pic" ]; then
     # add overlay image/logo to second screen
-	#convert "$tmpbg" "$pic" -gravity northwest -geometry +1920+0 -composite \
-	#-matte "$tmpbg"
-	ffmpeg -hide_banner -v error -i $tmpbg -i $pic -filter_complex \
-	'overlay=1920:0' -y $tmpbg
+    #convert "$tmpbg" "$pic" -gravity northwest -geometry +1920+0 -composite \
+    #-matte "$tmpbg"
+    ffmpeg -hide_banner -v error -i $tmpbg -i $pic -filter_complex \
+    'overlay=1920:0' -y $tmpbg
 fi
 
 i3lock -n -e -i "$tmpbg" >> /dev/null &
