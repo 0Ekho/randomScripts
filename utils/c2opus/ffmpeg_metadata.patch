@@ -1,0 +1,24 @@
+From e7cab3da9bf45c4b57a0cddad7347802aa02c43b Mon Sep 17 00:00:00 2001
+From: Ekho <my email>
+Date: Sat, 8 Jul 2017 17:04:00 +0000
+Subject: [PATCH] extend metadata buffer to allow for larger tag values
+
+---
+ libavformat/ffmetadec.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/libavformat/ffmetadec.c b/libavformat/ffmetadec.c
+index 3290b3b..c3d5629 100644
+--- a/libavformat/ffmetadec.c
++++ b/libavformat/ffmetadec.c
+@@ -128,7 +128,7 @@ static int read_tag(const uint8_t *line, AVDictionary **m)
+ static int read_header(AVFormatContext *s)
+ {
+     AVDictionary **m = &s->metadata;
+-    uint8_t line[1024];
++    uint8_t line[7340032]; // #mdlspm
+
+     while(!avio_feof(s->pb)) {
+         get_line(s->pb, line, sizeof(line));
+--
+2.13.2
