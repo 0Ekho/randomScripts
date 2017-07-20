@@ -4,7 +4,7 @@ nvidia-settings -a "[gpu:0]/GPUFanControlState=1"
 # I hope this doesnt need comments explaining
 while true
 do
-    gputemp=`nvidia-settings --query [gpu:0]/GPUCoreTemp -t`
+    gputemp=$(nvidia-settings --query [gpu:0]/GPUCoreTemp -t)
     case "${gputemp}" in
         1[0-9])
             newfanspeed="15"
@@ -62,7 +62,7 @@ do
             newfanspeed="70"
             ;;
     esac
-    nvidia-settings -a [fan:0]/GPUTargetFanSpeed=$newfanspeed > /dev/null
+    nvidia-settings -a [fan:0]/GPUTargetFanSpeed="$newfanspeed" > /dev/null
     sleep 10s
 done
 
