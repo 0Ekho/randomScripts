@@ -6,7 +6,7 @@
 
  MIT License
 
- Copyright (c) 2017 Ekho
+ Copyright (c) 2018, Ekho
 
  Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -37,9 +37,7 @@
 
  Depends on "JSON" and "List::MoreUtils" from CPAN.
 
- requires curl, sed, and rg (ripgrep: https://github.com/BurntSushi/ripgrep)
- currently as this is a hurried rewrite of a bash script and I'm to lazy to
- replace those parts.
+ requires curl, though if you don't have curl already...
 
  Expects chatty to be installed in $HOME/.chatty, if you have installed chatty
  elsewhere please change the CHATTY_DIR constant to the correct location.
@@ -70,9 +68,8 @@ use constant {
     T_PARAM_LIMIT => 80
 };
 my $CHATTY_DIR = "$ENV{'HOME'}/.chatty";
-my $t_r503 = '{"error":"Service Unavailable","status":503,"message":""}';
 
-local $/=undef;
+# read oauth from chatty
 open(my $login_file, "<", "$CHATTY_DIR/login")
     or die "cannot open login file: $!\n";
 my $oauth = decode_json(<$login_file>)->{token};
@@ -80,95 +77,82 @@ close($login_file);
 
 # -----------------------------------------------------------------------------
 
-# TODO: replace shell commands copied from old bash version of script with perl
-my $rg_out = `\
-rg 'follow' "$CHATTY_DIR/addressbook" | sed 's/ follow//'`;
+sub twitch_req;
 
-my @users = split("\n", $rg_out);
+# -----------------------------------------------------------------------------
 
-my (@streams, %user_ids, %game_ids);
-my $reg_seg;
+my (@users, @streams, %user_ids, %game_ids);
 
-# get all live streams.
-$reg_seg = natatime(T_PARAM_LIMIT, @users);
+# Get all usernames with the "follow" tag in the adressbook.
+open(my $adrssb, "<", "$CHATTY_DIR/addressbook")
+    or die "cannot open adressbook: $!\n";
+foreach my $line (grep {$_ =~ " follow"} <$adrssb>) {
+    push(@users, $line =~ /^(\w+)/);
+}
+close($adrssb);
+
 print("Looking up live streams, please wait");
-while (my @usrs = $reg_seg->()) {
-    my ($req, $resp, $dec_resp);
-    print(".");
-    $req = 'https://api.twitch.tv/helix/streams?';
-    foreach my $usr (@usrs) {
-        $req .= "&user_login=$usr";
-    }
-    $resp = `curl -sH "Authorization: Bearer $oauth" '$req'`;
-    if ($resp eq $t_r503) {
-        die "Error | Twitch returned 503, please try again.\n";
-    }
-    $dec_resp = decode_json($resp);
-    foreach my $live (@{$dec_resp->{data}}) {
-        push(@streams, $live);
-        $user_ids{$live->{user_id}} = 0;
-        $game_ids{$live->{game_id}} = 0;
-    }
-    sleep 1;
-}
-print("\n");
+twitch_req(\@users, "streams", "user_login", sub {
+    my $live = shift;
+    push(@streams, $live);
+    $user_ids{$live->{user_id}} = 0;
+    $game_ids{$live->{game_id}} = 0;
+});
 
-# lookup all game ID's
-$reg_seg = natatime(T_PARAM_LIMIT, (keys %game_ids));
 print("Looking up game ID's, Please wait");
-while (my @ids = $reg_seg->()) {
-    my ($req, $resp, $dec_resp);
-    print(".");
-    $req = 'https://api.twitch.tv/helix/games?';
-    foreach my $id (@ids) {
-        $req .= "&id=$id";
-    }
-    $resp = `curl -sH "Authorization: Bearer $oauth" '$req'`;
-    if ($resp eq $t_r503) {
-        die "Error | Twitch returned 503, please try again.\n";
-    }
-    $dec_resp = decode_json($resp);
-    foreach my $game (@{$dec_resp->{data}}) {
-        $game_ids{$game->{id}} = $game->{name};
-    }
-    sleep 1;
-}
-print("\n");
+twitch_req([keys %game_ids], "games", "id", sub {
+    my $game = shift;
+    $game_ids{$game->{id}} = $game->{name};
+});
 
-# lookup all user ID's
-$reg_seg = natatime(T_PARAM_LIMIT, (keys %user_ids));
 print("Looking up user ID's, Please wait");
-while (my @ids = $reg_seg->()) {
-    my ($req, $resp, $dec_resp);
-    print(".");
-    $req = 'https://api.twitch.tv/helix/users?';
-    foreach my $id (@ids) {
-        $req .= "&id=$id";
-    }
-    $resp = `curl -sH "Authorization: Bearer $oauth" '$req'`;
-    if ($resp eq $t_r503) {
-        die "Error | Twitch returned 503, please try again.\n";
-    }
-    $dec_resp = decode_json($resp);
-    foreach my $user (@{$dec_resp->{data}}) {
-        $user_ids{$user->{id}} = $user->{display_name};
-    }
-    sleep 1;
-}
-print("\n");
+twitch_req([keys %user_ids], "users", "id", sub {
+    my $user = shift;
+    $user_ids{$user->{id}} = $user->{display_name};
+});
 
-# print all live streams
-print("\n┌──────────────────────────┬────────────────────────────────────");
-print("┬──────────────────────────────────────────────────────────────┐\n");
+print("\n┌────────────────────────┬──────────────────────────────────┬───",
+    "───────────────────────────────────────────────────────────────┐\n");
 my $itr = 0;
 foreach my $live (@streams) {
-        printf("│ %-24s │%-34s│〈%s〉\n", $user_ids{$live->{user_id}},
-    "「$game_ids{$live->{game_id}}」", $live->{title});
+    # some games have very long names, truncate to 30 characters
+    my $gn = sprintf('%.30s', $game_ids{$live->{game_id}});
+    printf("│ %-22s │%-32s│〈%s〉\n", $user_ids{$live->{user_id}},
+        "「$gn」", $live->{title});
     $itr++;
     if ($itr < scalar @streams) {
-    print("├──────────────────────────┼────────────────────────────────────");
-    print("┼──────────────────────────────────────────────────────────────┤\n");
+    print("├────────────────────────┼──────────────────────────────────┼───",
+        "───────────────────────────────────────────────────────────────┤\n");
     }
 }
-print("└──────────────────────────┴────────────────────────────────────");
-print("┴──────────────────────────────────────────────────────────────┘\n");
+print("└────────────────────────┴──────────────────────────────────┴───",
+    "───────────────────────────────────────────────────────────────┘\n");
+
+# -----------------------------------------------------------------------------
+
+sub twitch_req {
+    my ($vals, $ep, $param, $callback) = @_;
+    my $req_seg;
+
+    $req_seg = natatime(T_PARAM_LIMIT, @{$vals});
+    while (my @vs = $req_seg->()) {
+        my ($req, $resp, $dec_resp);
+        print(".");
+        $req = "https://api.twitch.tv/helix/$ep?";
+        foreach my $v (@vs) {
+            $req .= "&$param=$v";
+        }
+        # TODO: replace this at some point maybe.
+        $resp = `curl -sH "Authorization: Bearer $oauth" '$req'`;
+        if ($resp !~ /{"data":/) {
+            print("$resp\n");
+            die "Error | Twitch returned $resp, please try again.\n";
+        }
+        $dec_resp = decode_json($resp);
+        foreach my $live (@{$dec_resp->{data}}) {
+            $callback->($live);
+        }
+        sleep 1; # TODO: make sleep only run if more then N reqests?
+    }
+    print("\n");
+}
