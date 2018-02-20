@@ -55,7 +55,7 @@ use strict;
 use warnings;
 use utf8;
 
-use JSON qw( decode_json );
+use JSON qw(decode_json);
 use List::MoreUtils qw(natatime);
 
 binmode STDOUT, ":utf8";
