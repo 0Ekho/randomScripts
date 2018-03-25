@@ -32,18 +32,21 @@
 
 =head4
 
- Short script for showing live twitch streams based on chatty's
- (https://github.com/chatty/chatty) adressbook.
+ Short script for showing live twitch streams
+
 
  Depends on "JSON" and "List::MoreUtils" from CPAN.
 
  requires curl, though if you don't have curl already...
 
- Expects chatty to be installed in $HOME/.chatty, if you have installed chatty
- elsewhere please change the CHATTY_DIR constant to the correct location.
+ Expects 2 config files in ~/.config/twitchlive
+ 'oauth' which contains a twitch oauth token on the first line
+ and 'addressbook' which is structured as
+ 
+ channel tag othertag
+ otherchannel tag
 
- To use: add users to your chatty address book and give them the category
- "follow"; then, to see all live streams, run this script.
+ with at least one tag set to "follow" for any channels you wish to follow
 
  No idea how reliable this is, has no actual testing.
 
@@ -55,7 +58,7 @@ use strict;
 use warnings;
 use utf8;
 
-use JSON qw(decode_json);
+use JSON qw( decode_json );
 use List::MoreUtils qw(natatime);
 
 binmode STDOUT, ":utf8";
@@ -65,14 +68,14 @@ binmode STDIN, ":encoding(UTF-8)";
 
 # constants
 use constant {
-    T_PARAM_LIMIT => 80
+    T_PARAM_LIMIT => 80,
+    CONFIG_DIR => "$ENV{'HOME'}/.config/twitchlive"
 };
-my $CHATTY_DIR = "$ENV{'HOME'}/.chatty";
 
 # read oauth from chatty
-open(my $login_file, "<", "$CHATTY_DIR/login")
+open(my $login_file, "<", CONFIG_DIR.'/oauth')
     or die "cannot open login file: $!\n";
-my $oauth = decode_json(<$login_file>)->{token};
+chomp(my $oauth = <$login_file>);
 close($login_file);
 
 # -----------------------------------------------------------------------------
@@ -84,7 +87,7 @@ sub twitch_req;
 my (@users, @streams, %user_ids, %game_ids);
 
 # Get all usernames with the "follow" tag in the adressbook.
-open(my $adrssb, "<", "$CHATTY_DIR/addressbook")
+open(my $adrssb, "<", CONFIG_DIR.'/addressbook')
     or die "cannot open adressbook: $!\n";
 foreach my $line (grep {$_ =~ " follow"} <$adrssb>) {
     push(@users, $line =~ /^(\w+)/);
