@@ -88,6 +88,8 @@ while(1) {
         case '4' {$data = `mocp --seek -1000`;}
         case '5' {$data = `mocp --volume +5`;}
         case '6' {$data = `mocp --volume -5`;}
+        case '7' {$data = `
+            mocp --format '〔%state〕 %artist - %song 〈%ct/%tt (%tl)〉'`;}
     }
 
     $client_socket->send($data);
