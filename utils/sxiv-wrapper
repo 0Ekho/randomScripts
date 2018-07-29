@@ -1,0 +1,98 @@
+#!/bin/bash
+
+:<<'EOC'
+ BSD-0
+
+ Copyright (C) 2018, Ekho
+
+ Permission to use, copy, modify, and/or distribute this software for any
+ purpose with or without fee is hereby granted.
+
+ THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+ WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+ MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+ WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN
+ ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
+ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+ ------------------------------------------------------------------------------
+EOC
+
+# wrapper script for sxiv, allowing for some http[s] files and for sizing window
+# to first image displayed size instead of 800x600
+# currently has almost no testing, probably broken
+
+set -uo pipefail
+IFS=$'\n\b'
+
+# check if any arguments refer to http files or are -g or -b
+declare -a args
+declare -a tmp_fls
+g=0
+b=0
+for a in "$@"; do
+    if [[ "$a" =~ ^http://|^https:// ]]; then
+        ext="${a##*.}"
+        # whitelist file types from link
+        if [[ "$ext" =~ ^jpg$|^jpeg$|^png$|^gif$|^tiff$|^bmp$ ]]; then
+            # if you get a collusion issue here IDK anymore, go but lottery
+            rnd=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
+            nwnm="/tmp/sxiv_tmp-$rnd.$ext"
+            echo "retrieving link: '$a'"
+            curl --progress-bar --output "$nwnm" "$a"
+            args+=("$nwnm")
+            tmp_fls+=("$nwnm")
+        else
+            echo "WARNING: Bad file type: '$ext', in link: '$a',\
+ removing from args" 1>&2
+        fi
+    else
+        args+=("$a")
+    fi     
+    if [[ "$a" == '-g' ]]; then
+        g=1
+    elif [[ "$a" == '-b' ]]; then
+        b=1
+    fi
+done
+
+# size window to first image shown, taking -n into account
+if [[ "$g" -eq 0 ]]; then
+    # currently -n needs to be first arg (like ranger)
+    # other options will break this currently so need to use -g
+    # with any others then -n
+    if [[ "${args[0]}" == '-n' ]]; then
+        strt="${args[1]}"
+        offst=$(( strt + 2 ))
+        img="${args[$offst]}"
+    else
+        img="${args[0]}"
+    fi
+    IFS=$' '
+    if ! read -r width height < <(identify -format '%w %h\n' "$img"); then
+        # incase error with image (ex: missing)
+        read -r width height < <(echo '800 600')
+    fi 
+    IFS=$'\n\b'
+    if [[ "$b" -eq 0 ]]; then
+        # need room for status bar also
+        height=$(( height + 16 ))
+    fi
+fi
+
+#printf "'%s' " "${args[@]}"
+#echo
+
+# if WxH smaller then screen size minus window decoration size
+if [[ "$g" -eq 0 ]] && [[ "$width" -le 1916 ]] && [[ "$height" -le 1062 ]]; then
+    /usr/bin/sxiv -g "${width}x${height}" "${args[@]}"
+else
+    /usr/bin/sxiv "${args[@]}"
+fi
+
+# cleanup
+if [[ -n "${tmp_fls[*]}" ]]; then
+    # I think this might be sketchy, 
+    rm -- "${tmp_fls[@]}"
+fi
