@@ -66,6 +66,8 @@ if [[ "$g" -eq 0 ]]; then
         strt="${args[1]}"
         offst=$(( strt + 2 ))
         img="${args[$offst]}"
+    elif [[ "${args[0]}" == '--' ]]; then
+        img="${args[1]}"
     else
         img="${args[0]}"
     fi
