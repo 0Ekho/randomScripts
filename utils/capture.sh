@@ -61,7 +61,7 @@ upload_file_site()
     # get just the url for the file
     url=$(echo "$response" | grep -Po '(?<="url":").*?(?=")')
     # save response so can find/delete it if wanted later.
-    printf "\nFile: %s, Time: %s, Response: %s " "$(readlink -f "$file_path")" \
+    printf "File: %s, Time: %s, Response: %s\\n" "$(readlink -f "$file_path")" \
     "$time_stamp" "$response" >> "$folder/history.txt"
     echo -n "$url" | xclip -i -selection c
     notify-send -t 4000 "File Uploaded to: $url and link copied to clipboard"
