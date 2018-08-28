@@ -2,7 +2,7 @@
 
 =encoding utf8
 
-=pod LICENCE
+=pod LICENSE
 
  MIT License
 
