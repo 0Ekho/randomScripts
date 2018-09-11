@@ -42,7 +42,7 @@ use strict;
 use warnings;
 use utf8;
 
-use Switch;
+use feature "switch";
 use IO::Socket::INET;
 
 binmode(STDOUT, ":utf8");
@@ -62,7 +62,7 @@ sub trim;
 # -----------------------------------------------------------------------------
 # main
 
-my $socket = new IO::Socket::INET (
+my $socket = IO::Socket::INET->new(
     LocalAddr => '192.168.2.21:9010',
     Proto => 'tcp',
     Listen => 5,
@@ -81,14 +81,14 @@ while(1) {
     print "received: $data from: $client_address\n";
     
     # music controls, no output normally but capture anyway
-    switch ($data) {
-        case '1' {$data = `mocp --toggle-pause`;}
-        case '2' {$data = `mocp --previous`;}
-        case '3' {$data = `mocp --next`;}
-        case '4' {$data = `mocp --seek -1000`;}
-        case '5' {$data = `mocp --volume +5`;}
-        case '6' {$data = `mocp --volume -5`;}
-        case '7' {$data = `
+    given ($data) {
+        when ('1') {$data = `mocp --toggle-pause`;}
+        when ('2') {$data = `mocp --previous`;}
+        when ('3') {$data = `mocp --next`;}
+        when ('4') {$data = `mocp --seek -1000`;}
+        when ('5') {$data = `mocp --volume +5`;}
+        when ('6') {$data = `mocp --volume -5`;}
+        when ('7') {$data = `
             mocp --format '〔%state〕 %artist - %song 〈%ct/%tt (%tl)〉'`;}
     }
 

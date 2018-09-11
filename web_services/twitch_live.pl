@@ -1,8 +1,8 @@
-#!/usr/bin/perl
+#!/usr/bin/env perl
 
 =encoding utf8
 
-=pod LICENSE
+=pod LICENCE
 
  MIT License
 
@@ -58,8 +58,8 @@ use strict;
 use warnings;
 use utf8;
 
-use JSON qw( decode_json );
-use List::MoreUtils qw(natatime);
+use JSON::MaybeXS qw(decode_json);
+use List::SomeUtils qw(natatime);
 
 binmode STDOUT, ":utf8";
 binmode STDIN, ":encoding(UTF-8)";
