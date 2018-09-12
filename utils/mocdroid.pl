@@ -42,7 +42,6 @@ use strict;
 use warnings;
 use utf8;
 
-use feature "switch";
 use IO::Socket::INET;
 
 binmode(STDOUT, ":utf8");
@@ -81,15 +80,18 @@ while(1) {
     print "received: $data from: $client_address\n";
     
     # music controls, no output normally but capture anyway
-    given ($data) {
-        when ('1') {$data = `mocp --toggle-pause`;}
-        when ('2') {$data = `mocp --previous`;}
-        when ('3') {$data = `mocp --next`;}
-        when ('4') {$data = `mocp --seek -1000`;}
-        when ('5') {$data = `mocp --volume +5`;}
-        when ('6') {$data = `mocp --volume -5`;}
-        when ('7') {$data = `
-            mocp --format '〔%state〕 %artist - %song 〈%ct/%tt (%tl)〉'`;}
+    my %switch = (
+        '1' => sub {$data = `mocp --toggle-pause`;},
+        '2' => sub {$data = `mocp --previous`;},
+        '3' => sub {$data = `mocp --next`;},
+        '4' => sub {$data = `mocp --seek -1000`;},
+        '5' => sub {$data = `mocp --volume +5`;},
+        '6' => sub {$data = `mocp --volume -5`;},
+        '7' => sub {$data = `
+            mocp --format '〔%state〕 %artist - %song 〈%ct/%tt (%tl)〉'`;},
+    );
+    if ($switch{$data}){
+        $switch{$data}->();
     }
 
     $client_socket->send($data);
