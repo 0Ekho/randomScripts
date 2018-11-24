@@ -15,12 +15,19 @@ et="$(sed -n '3p' "$1")"
 
 plog="oe2pass_$(head /dev/urandom |  tr -dc A-Za-z0-9 | head -c 4)"
 
-ffmpeg -hide_banner -ss "$st" -i "$if" -to "$et" -pass 1 -passlogfile "$plog"\
+# apparently ffmpeg -to does not work on my version so convert to -t
+# this is a terrible way to do this
+dss=$(date --date "1970-01-01 $st" '+%s.%N')
+dse=$(date --date "1970-01-01 $et" '+%s.%N')
+et=$(dc -e "3k $dse $dss - 1 /p")
+
+
+ffmpeg -hide_banner -ss "$st" -i "$if" -t "$et" -pass 1 -passlogfile "$plog"\
  -threads 6 -c:v libvpx-vp9 -b:v 4M -crf 23 -minrate 400K -maxrate 8M\
  -deadline good -cpu-used 4 -tile-columns 4 -frame-parallel 1 -g 240\
  -an -sn -y -f webm /dev/null
 
-ffmpeg -hide_banner -ss "$st" -i "$if" -to "$et" -pass 2 -passlogfile "$plog"\
+ffmpeg -hide_banner -ss "$st" -i "$if" -t "$et" -pass 2 -passlogfile "$plog"\
  -threads 6 -c:v libvpx-vp9 -b:v 4M -crf 23 -minrate 400K -maxrate 8M\
  -deadline good -cpu-used 2 -slices 4 -tile-columns 4 -frame-parallel 1\
  -auto-alt-ref 1 -lag-in-frames 25 -g 240 -sn -c:a libopus -b:a 160k\
