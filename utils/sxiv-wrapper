@@ -35,7 +35,7 @@ for a in "$@"; do
     if [[ "$a" =~ ^http://|^https:// ]]; then
         ext="${a##*.}"
         # whitelist file types from link
-        if [[ "$ext" =~ ^jpg$|^jpeg$|^png$|^gif$|^tiff$|^bmp$ ]]; then
+        if [[ "$ext" =~ ^jpg$|^jpeg$|^png$|^gif$|^tiff$|^bmp$|^jpg:orig$|^png:orig$ ]]; then
             # if you get a collusion issue here IDK anymore, go but lottery
             rnd=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 16)
             nwnm="/tmp/sxiv_tmp-$rnd.$ext"
@@ -72,14 +72,14 @@ if [[ "$g" -eq 0 ]]; then
         img="${args[0]}"
     fi
     IFS=$' '
-    if ! read -r width height < <(identify -format '%w %h\n' "$img"); then
+    if ! read -r width height < <(exiftool -b -ImageSize "$img"; echo ""); then
         # incase error with image (ex: missing)
         read -r width height < <(echo '800 600')
     fi 
     IFS=$'\n\b'
     if [[ "$b" -eq 0 ]]; then
-        # need room for status bar also
-        height=$(( height + 16 ))
+        # need room for status bar also, adjust depending on font
+        height=$(( height + 20 ))
     fi
 fi
 
@@ -88,9 +88,11 @@ fi
 
 # if WxH smaller then screen size minus window decoration size
 if [[ "$g" -eq 0 ]] && [[ "$width" -le 1916 ]] && [[ "$height" -le 1062 ]]; then
-    /usr/bin/sxiv -g "${width}x${height}" "${args[@]}"
+    # with English CTYPE get tofu, I think the font is not falling back
+    # Japanese CTYPE fixes this (forcing use of compatible font?)
+    LC_CTYPE=ja_JP.utf8 /usr/bin/sxiv -g "${width}x${height}" -o "${args[@]}" 
 else
-    /usr/bin/sxiv "${args[@]}"
+    LC_CTYPE=ja_JP.utf8 /usr/bin/sxiv -o "${args[@]}"
 fi
 
 # cleanup
