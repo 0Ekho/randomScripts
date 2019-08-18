@@ -1,170 +1,192 @@
 #!/bin/bash
+
+# MIT License
+# Copyright (c) 2019 Ekho <ekho@ekho.email>
+
+# Simple script for capturing screenshots and uploading them or another file
+# to a simple file hosting site. 
+# depends on ffmpeg, exiftool, notofy-send and curl
+
+# also needs xfce4-screenshooter, or can uncomment xwd and use that instead 
+# (but area select will not work currently)
+
+# you will need to edit the curl command to work with your file host of choice
+
 set -euo pipefail
 IFS=$'\n\t'
 
-# Simple script for capturing screenshots and uploading them or another file
-# to a simple file hosting site. depends on ffmpeg and exiftool
-# if xfce needs xfce4-screenshooter, else can uncomment xwd and use that instead
-# (but area select will not work currently)
-# you will need to edit to work with your site
 
+main_dir="$HOME/.sharenix"
+archive_dir="$main_dir/archive"
 
-folder=$(dirname "$0")
-archive="$folder/archive"
+# use PNG for images
+iext='png'
+
 # WARNING, deleting this file will cause the couter to reset and new
 # files to overwrite the old ones.
-if [ ! -f "$folder/counter.txt" ]; then
-    echo "0" > "$folder/counter.txt"
+if [ ! -f "$main_dir/count" ]; then
+    echo "0" > "$main_dir/count"
 fi
-count=$(cat "$folder/counter.txt")
-file_name="SN$(printf %07d "$count")"
+count=$(cat "$main_dir/count")
+file_name="$(printf "SN_%07d" "$count")"
 ((count++))
-echo $count > "$folder/counter.txt"
+echo $count > "$main_dir/count"
+
+
+# mktemp but with file extensions, for ffmpeg format detection
+mktmp()
+{
+    mktf=$(mktemp "$1")
+    mv "$mktf" "$mktf.$2"
+    echo "$mktf.$2"
+}
 
 # this mess will use ffmpeg to add a timestamp to the image
 # NOTE: do not call this with on non screenshot files, destroys original file
 timestamp()
 {
+    # set to font of choice, may have to chage size values for other fonts
     fontpath='/usr/share/fonts/truetype/hack/Hack-Regular.ttf'
+
     height=$(exiftool -b -ImageHeight "$file_path");
     width=$(exiftool -b -ImageWidth "$file_path");
     # readable text wont fit on something too small so skip
     if (( height <= 25 )) || (( width <= 100 )); then
-        notify-send -t 4000 "Image to small for timestamp to be added."
+        notify-send -t 4000 "Image too small for timestamp to be added."
     else
         # smaller images get a smaller font to make things fit better
         if (( height <= 250 )) || (( width <= 500 )); then
             pntsize=12
-            ofst=2
+            pxw=7
+            ofst=4
             srkwdt=1
         else
-            pntsize=18
-            ofst=4
+            pntsize=20
+            pxw=12
+            ofst=8
             srkwdt=2
         fi
+
+        # ffmpeg escaping .-.
         timestamp=$(date "+%Y-%m-%d %H\\\\\\:%M\\\\\\:%S")
-        tf=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
-        mv "$file_path" "/tmp/capts_$tf"
-        ffmpeg -i "/tmp/capts_$tf" -vf "$(printf '%s%s%s'\
+        tf=$(mktmp "/tmp/snts_XXXXXXXX" "$iext")
+
+        ffmpeg -hide_banner -v warning -i "$file_path" -vf "$(printf '%s%s%s'\
          "drawtext=fontfile=${fontpath}:text=${timestamp}:fontsize=${pntsize}"\
          ":fontcolor=white:borderw=${srkwdt}:bordercolor=black"\
-         ":x=(w-${ofst}-${pntsize}*11):y=(h-${ofst}-${pntsize})")" "$file_path"
-        rm "/tmp/capts_$tf"
-    fi
-}
-upload_file_site()
-{
-    apikey=$(cat "$folder/apikey.txt")
-    time_stamp=$(date "+%Y-%m-%d %H:%M:%S")
-    notify-send -t 2000 "File is being uploaded..."
-    # upload file to site and save response to file and grep url uploaded to
-    response=$(curl -s --limit-rate 125K -F "file=@$file_path" -F "apikey=$apikey" \
-    https://x88.moe/api/v1/upload.php)
-    # get just the url for the file
-    url=$(echo "$response" | grep -Po '(?<="url":").*?(?=")')
-    # save response so can find/delete it if wanted later.
-    printf "File: %s, Time: %s, Response: %s\\n" "$(readlink -f "$file_path")" \
-    "$time_stamp" "$response" >> "$folder/history.txt"
-    echo -n "$url" | xclip -i -selection c
-    notify-send -t 4000 "File Uploaded to: $url and link copied to clipboard"
-}
-copy_file()
-{
-    tmpfile_name=$(basename "$file_path")
-    exten="${tmpfile_name##*.}"
-    new_path="$archive/$file_name.$exten"
-    cp "$file_path" "$new_path"
-    file_path="$new_path"
-}
-share_file()
-{
-    # if no file screenshot was cancelled
-    if [ -e "$file_path" ]; then
-        if [ "$copy" -eq 1 ]; then
-            copy_file
-        fi
-        upload_file_site
-    else
-        notify-send -t 4000 "Screenshot Cancelled"
+         ":x=(w-${ofst}-${pxw}*19):y=(h-${ofst}/2-${pntsize})")" -y "$tf"
+
+        mv "$tf" "$file_path"
     fi
 }
 
+upload_file_site()
+{
+    apikey=$(cat "$main_dir/apikey")
+    upload_time=$(date "+%Y-%m-%d %H:%M:%S")
+
+    notify-send -t 2000 "File is being uploaded..."
+
+    # upload file to site
+    if ! response=$(curl -s --limit-rate 400K -F "file=@$file_path"\
+     -F "apikey=$apikey" https://x88.moe/api/v1/upload); then
+        notify-send -t 2000 "curl exited with error!"
+        exit 4
+    fi
+
+    # save response, needed for deletion links
+    # CSV header: 'upload_time,file_path,response'
+    # NOTE: there is no quoting or escaping currently, so ',' in filenames can
+    # cause issues parsing this file later
+    printf "%s,%s,%s\\n" "$upload_time" "$(readlink -f "$file_path")"\
+     "$(echo "$response" | tr --delete '\n' | sed 's/ \+/ /g')"\
+     >> "$main_dir/history.csv"
+
+    # check if response is an error, should improve this check
+    if [[ "$response" =~ "\"error\": " ]]; then
+        err_msg=$(echo "$response" | grep -Po '(?<="error": ").*?(?=")')
+        notify-send -t 2000 "upload failed! $err_msg"
+    fi
+    
+    # get URL for clipboard
+    url=$(echo "$response" | grep -Po '(?<="url": ").*?(?=")')
+    echo -n "$url" | xclip -i -selection clipboard
+    echo -n "$url" | xclip -i -selection primary
+    notify-send -t 4000 "File Uploaded to: $url and link copied to clipboard"
+}
+
+# -----------------------------------------------------------------------------
+
 share=0
-copy=0
+add_ts=0
+
 # parse the input
 for i in "$@"; do
     case $i in
-        -f=*|--file=*)
+        -u=*|--upload-file=*)
             file_path=$(readlink -f "${i#*=}")
+            share=1
+            add_ts=-1
         ;;
-        -a|--area)
-            file_path="$archive/$file_name.png"
+        -a|--area|-r|--region)
+            file_path="$archive_dir/$file_name.$iext"
             xfce4-screenshooter -r -s "$file_path"
         ;;
         -w|--window)
-            file_path="$archive/$file_name.png"
-            #rand=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
-            # for some reason pipe break ffmpeg
+            file_path="$archive_dir/$file_name.$iext"
+
+            # pipes break ffmpeg with xwd unfortunatly
+            #tf=$(mktemp "/tmp/snts_XXXXXXXX")
             #xwd -id "$(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2)"\
-            # -out "/tmp/tc_${rand}.xwd"
-            #ffmpeg -i "/tmp/tc_${rand}.xwd" -vframes 1 "$file_path"
-            #rm "/tmp/tc_${rand}.xwd"
+            # -out "$tf"
+            #ffmpeg -hide_banner -v warning\
+            # -f xwd_pipe -i "$tf" -vframes 1 "$file_path"
+            #rm "$tf"
+
             xfce4-screenshooter -w -s "$file_path"
         ;;
-        -x|--fullscreen)
-            file_path="$archive/$file_name.png"
-            #rand=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
-            # for some reason pipe break ffmpeg
-            #xwd -root -out "/tmp/tc_${rand}.xwd"
-            #ffmpeg -i "/tmp/tc_${rand}.xwd" -vframes 1 "$file_path"
-            #rm "/tmp/tc_${rand}.xwd"
+        -f|--fullscreen)
+            file_path="$archive_dir/$file_name.$iext"
+
+            #tf=$(mktemp "/tmp/snts_XXXXXXXX")
+            #xwd -root -out "$tf"
+            #ffmpeg -hide_banner -v warning\
+            # -f xwd_pipe -i "$tf" -vframes 1 "$file_path"
+            #rm "$tf"
+
             xfce4-screenshooter -f -s "$file_path"
+
             # fix error caused by different sized screens, you shouldn't need
             # this
-            mv "$file_path" "/tmp/cap_fix.png"
-            ffmpeg -hide_banner -v error -i "/tmp/cap_fix.png"\
+            tf=$(mktmp "/tmp/snts_XXXXXXXX" "$iext")
+            mv "$file_path" "$tf"
+            ffmpeg -hide_banner -v warning -i "$tf"\
              -vf drawbox=5760:0:1440:180:0x090909:t=fill -vframes 1 -y\
              "$file_path"
-            rm "/tmp/cap_fix.png"
+            rm "$tf"
         ;;
-        -t|--area-timestamp)
-            file_path="$archive/$file_name.png"
-            xfce4-screenshooter -r -s "$file_path"
-            timestamp
-        ;;
-        -g|--window-timestamp)
-            file_path="$archive/$file_name.png"
-            #rand=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
-            # for some reason pipe break ffmpeg
-            #xwd -id "$(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2)"\
-            # -out "/tmp/tc_${rand}.xwd"
-            #ffmpeg -i "/tmp/tc_${rand}.xwd" -vframes 1 "$file_path"
-            #rm "/tmp/tc_${rand}.xwd"
-            xfce4-screenshooter -w -s "$file_path"
-            timestamp
-        ;;
-        # maybe sometime make clipboard data type automatically checked
-        -c|--clipboard)
-            file_path="$archive/$file_name.txt"
-            xclip -selection clipboard -o > "$file_path"
-        ;;
-        -z|--clipboard-image)
-            file_path="$archive/$file_name.png"
-            xclip -selection clipboard -t image/png -o > "$file_path"
-        ;;
-        -r|--tmp-capture)
+        -e|--tmp-capture)
             rand=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
-            file_path="/tmp/tc$rand.png"
+            file_path="/tmp/tc_$rand.$iext"
+
+            #tf=$(mktemp "/tmp/snts_XXXXXXXX")
             #xwd -id "$(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2)"\
-            # -out "/tmp/tc_${rand}.xwd"
-            #ffmpeg -i "/tmp/tc_${rand}.xwd" -vframes 1 "$file_path"
-            #rm "/tmp/tc_${rand}.xwd"
+            # -out "$tf"
+            #ffmpeg -hide_banner -v warning\
+            # -f xwd_pipe -i "$tf" -vframes 1 "$file_path"
+            #rm "$tf"
+
             xfce4-screenshooter -w -s "$file_path"
-            echo -n "$file_path" | xclip -i -selection c
+            echo -n "$file_path" | xclip -i -selection clipboard
             notify-send -t 4000 "File saved to $file_path"
         ;;
-        -b|--copy)
-            copy=1
+        -t|--timestamp)
+            if [ $add_ts -eq 0 ]; then
+                add_ts=1
+            else
+                echo "refusing to timestamp non screenshot file, "\
+                 "timestamp destructivly modifies original"
+            fi
         ;;
         -s|--share)
             share=1
@@ -175,12 +197,17 @@ for i in "$@"; do
         ;;
     esac
 done
-# if no args default to area && share
-if [ -z "${file_path+x}" ]; then
-    file_path="$archive/$file_name.png"
-    xfce4-screenshooter -w -s "$file_path"
-    share=1
+
+
+if [ $add_ts -eq 1 ]; then
+    timestamp
 fi
+
 if [ $share -eq 1 ]; then
-    share_file
+    # if no file screenshot was cancelled
+    if [ -e "$file_path" ]; then
+        upload_file_site
+    else
+        notify-send -t 4000 "Screenshot Cancelled"
+    fi
 fi
