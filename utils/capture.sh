@@ -71,6 +71,7 @@ timestamp()
         timestamp=$(date "+%Y-%m-%d %H\\\\\\:%M\\\\\\:%S")
         tf=$(mktmp "/tmp/snts_XXXXXXXX" "$iext")
 
+        # TODO: apparently ffmpeg has gmtime, use instead
         ffmpeg -hide_banner -v warning -i "$file_path" -vf "$(printf '%s%s%s'\
          "drawtext=fontfile=${fontpath}:text=${timestamp}:fontsize=${pntsize}"\
          ":fontcolor=white:borderw=${srkwdt}:bordercolor=black"\
@@ -93,26 +94,33 @@ upload_file_site()
         notify-send -t 2000 "curl exited with error!"
         exit 4
     fi
+    response="$(echo "$response" | tr --delete '\n' | sed 's/ \+/ /g')"
 
     # save response, needed for deletion links
     # CSV header: 'upload_time,file_path,response'
     # NOTE: there is no quoting or escaping currently, so ',' in filenames can
     # cause issues parsing this file later
     printf "%s,%s,%s\\n" "$upload_time" "$(readlink -f "$file_path")"\
-     "$(echo "$response" | tr --delete '\n' | sed 's/ \+/ /g')"\
-     >> "$main_dir/history.csv"
+            "$response" >> "$main_dir/history.csv"
 
     # check if response is an error, should improve this check
-    if [[ "$response" =~ "\"error\": " ]]; then
-        err_msg=$(echo "$response" | grep -Po '(?<="error": ").*?(?=")')
+    if [[ "$response" =~ "\"error\":" ]]; then
+        err_msg="$(echo "$response" | grep -Po '(?<="error":").*?(?=")')"
         notify-send -t 2000 "upload failed! $err_msg"
+        exit 2
     fi
     
     # get URL for clipboard
-    url=$(echo "$response" | grep -Po '(?<="url": ").*?(?=")')
-    echo -n "$url" | xclip -i -selection clipboard
-    echo -n "$url" | xclip -i -selection primary
-    notify-send -t 4000 "File Uploaded to: $url and link copied to clipboard"
+    if [[ "$response" =~ "\"url\":" ]]; then
+        url="$(echo "$response" | grep -Po '(?<="url":").*?(?=")')"
+        echo -n "$url" | xclip -i -selection clipboard
+        echo -n "$url" | xclip -i -selection primary
+        notify-send -t 4000 "File Uploaded to: $url and link copied to clipboard"
+    else
+        notify-send -t 8000 "Unknown response: $response"
+        echo "$response"
+        exit 3
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -193,7 +201,7 @@ for i in "$@"; do
         ;;
         *)
             echo "unknown argument : $i, Exiting."
-            exit
+            exit 5
         ;;
     esac
 done
