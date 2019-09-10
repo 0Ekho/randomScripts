@@ -5,12 +5,14 @@
 
 # Simple script for capturing screenshots and uploading them or another file
 # to a simple file hosting site. 
-# depends on ffmpeg, exiftool, notofy-send and curl
+# depends on ffmpeg, exiftool, and sharenix.py
+# (which needs python3-pycurl and python3-dbus and xclip)
 
 # also needs xfce4-screenshooter, or can uncomment xwd and use that instead 
 # (but area select will not work currently)
 
-# you will need to edit the curl command to work with your file host of choice
+# you will need to edit the curl commands in sharenix.py to work with your file
+# host of choice
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -52,7 +54,7 @@ timestamp()
     width=$(exiftool -b -ImageWidth "$file_path");
     # readable text wont fit on something too small so skip
     if (( height <= 25 )) || (( width <= 100 )); then
-        notify-send -t 4000 "Image too small for timestamp to be added."
+        sharenix.py notify "Image too small for timestamp to be added." ""  2000
     else
         # smaller images get a smaller font to make things fit better
         if (( height <= 250 )) || (( width <= 500 )); then
@@ -85,16 +87,11 @@ upload_file_site()
 {
     apikey=$(cat "$main_dir/apikey")
     upload_time=$(date "+%Y-%m-%d %H:%M:%S")
-
-    notify-send -t 2000 "File is being uploaded..."
-
+    fail=0
     # upload file to site
-    if ! response=$(curl -s --limit-rate 400K -F "file=@$file_path"\
-     -F "apikey=$apikey" https://x88.moe/api/v1/upload); then
-        notify-send -t 2000 "curl exited with error!"
-        exit 4
+    if ! response="$(sharenix.py upload "$file_path" "$apikey")"; then
+        fail=$?
     fi
-    response="$(echo "$response" | tr --delete '\n' | sed 's/ \+/ /g')"
 
     # save response, needed for deletion links
     # CSV header: 'upload_time,file_path,response'
@@ -103,23 +100,9 @@ upload_file_site()
     printf "%s,%s,%s\\n" "$upload_time" "$(readlink -f "$file_path")"\
             "$response" >> "$main_dir/history.csv"
 
-    # check if response is an error, should improve this check
-    if [[ "$response" =~ "\"error\":" ]]; then
-        err_msg="$(echo "$response" | grep -Po '(?<="error":").*?(?=")')"
-        notify-send -t 2000 "upload failed! $err_msg"
-        exit 2
-    fi
-    
-    # get URL for clipboard
-    if [[ "$response" =~ "\"url\":" ]]; then
-        url="$(echo "$response" | grep -Po '(?<="url":").*?(?=")')"
-        echo -n "$url" | xclip -i -selection clipboard
-        echo -n "$url" | xclip -i -selection primary
-        notify-send -t 4000 "File Uploaded to: $url and link copied to clipboard"
-    else
-        notify-send -t 8000 "Unknown response: $response"
-        echo "$response"
-        exit 3
+    echo "$response"
+    if (( fail != 0 )); then
+        exit "$fail"
     fi
 }
 
@@ -173,7 +156,7 @@ for i in "$@"; do
              "$file_path"
             rm "$tf"
         ;;
-        -e|--tmp-capture)
+        -h|--tmp-capture)
             rand=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
             file_path="/tmp/tc_$rand.$iext"
 
@@ -186,7 +169,12 @@ for i in "$@"; do
 
             xfce4-screenshooter -w -s "$file_path"
             echo -n "$file_path" | xclip -i -selection clipboard
-            notify-send -t 4000 "File saved to $file_path"
+            sharenix.py notify "File saved to" "$file_path" 4000
+
+        ;;
+        -e|--edit)
+            # TODO: open file in editor (gimp) first to allow for blocking out
+            # private information easily
         ;;
         -t|--timestamp)
             if [ $add_ts -eq 0 ]; then
@@ -216,6 +204,6 @@ if [ $share -eq 1 ]; then
     if [ -e "$file_path" ]; then
         upload_file_site
     else
-        notify-send -t 4000 "Screenshot Cancelled"
+        sharenix.py notify "Screenshot Cancelled" "" 4000
     fi
 fi
