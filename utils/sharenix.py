@@ -9,13 +9,19 @@
 
 # requires pycurl, python3-dbus, and xclip
 
+from datetime import datetime
 from io import BytesIO
 import json
+from os import path, environ
 import re
 from subprocess import Popen, PIPE, DEVNULL
-import sys
+from sys import exit, argv
 import dbus
 import pycurl
+
+
+# -----------------------------------------------------------------------------
+main_dir = path.join(environ['HOME'], ".sharenix")
 
 
 def notify(title, body, time, replace):
@@ -44,6 +50,7 @@ def upload(fname, apikey):
     prog_notif_id = notify("Uploading: " + fname, "", 2000, 0)
 
     err_code = 0
+    msg = ""
     buffer = BytesIO()
 
     c = pycurl.Curl()
@@ -63,19 +70,19 @@ def upload(fname, apikey):
         c.perform()
     except pycurl.error as e:
         if e.args[0] == pycurl.E_COULDNT_CONNECT and c.exception:
-            print("ERROR:", c.exception)
+            msg = "ERROR:" + c.exception
             notify("Curl Error:", str(c.exception), 4000, prog_notif_id)
             err_code = 2
         else:
-            print("ERROR:", e)
+            msg = "ERROR:" + e
             notify("Curl Error:", str(e), 4000, prog_notif_id)
             err_code = 3
 
     response = buffer.getvalue().decode("utf-8")
-    print(re.sub(r"\s\s+", " ", response).replace("\n", " "))
+    msg = re.sub(r"\s\s+", " ", response).replace("\n", " ")
 
     if err_code:
-        sys.exit(err_code)
+        return (err_code, msg)
 
     resp = json.loads(response)
     if 'ok' in resp and 'url' in resp['ok']:
@@ -95,20 +102,29 @@ def upload(fname, apikey):
         notify("Unknown response", str(response), 4000, prog_notif_id)
         err_code = 5
 
-    if err_code:
-        sys.exit(err_code)
+    return (err_code, msg)
 
 
 def prog_notif(down_total, down, up_total, up):
-    # TODO: Add button to cancel upload
+    # TODO: Add button to cancel upload?
     notify("Uploading: " + prog_notif_fn,
            "{}B of {}B uploaded".format(up, up_total),
            4000, prog_notif_id)
 
 
-if sys.argv[1] == "upload":
-    upload(sys.argv[2], sys.argv[3])
-elif sys.argv[1] == "notify":
-    notify(sys.argv[2], sys.argv[3], int(sys.argv[4]), 0)
+# TODO: add checking to arguments
+if argv[1] == "upload":
+    with open(path.join(main_dir, "apikey")) as a:
+        apikey = a.readline().strip()
+
+    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    (errc, msg) = upload(argv[2], apikey)
+    print(msg)
+    with open(path.join(main_dir, "history.csv"), "a") as h:
+        h.write("{},{},{}\n".format(ts, path.abspath(argv[2]), msg))
+
+    exit(errc)
+elif argv[1] == "notify":
+    notify(argv[2], argv[3], int(argv[4]), 0)
 else:
-    print("Unknown command:", sys.argv[1])
+    print("Unknown command:", argv[1])

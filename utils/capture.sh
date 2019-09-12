@@ -83,42 +83,17 @@ timestamp()
     fi
 }
 
-upload_file_site()
-{
-    apikey=$(cat "$main_dir/apikey")
-    upload_time=$(date "+%Y-%m-%d %H:%M:%S")
-    fail=0
-    # upload file to site
-    if ! response="$(sharenix.py upload "$file_path" "$apikey")"; then
-        fail=$?
-    fi
-
-    # save response, needed for deletion links
-    # CSV header: 'upload_time,file_path,response'
-    # NOTE: there is no quoting or escaping currently, so ',' in filenames can
-    # cause issues parsing this file later
-    printf "%s,%s,%s\\n" "$upload_time" "$(readlink -f "$file_path")"\
-            "$response" >> "$main_dir/history.csv"
-
-    echo "$response"
-    if (( fail != 0 )); then
-        exit "$fail"
-    fi
-}
-
 # -----------------------------------------------------------------------------
 
 share=0
+edit_img=0
 add_ts=0
+# flag may set negative to force disable timestamps if incompatable (such as if
+# it uses an existing file, which must not be modified)
 
 # parse the input
 for i in "$@"; do
     case $i in
-        -u=*|--upload-file=*)
-            file_path=$(readlink -f "${i#*=}")
-            share=1
-            add_ts=-1
-        ;;
         -a|--area|-r|--region)
             file_path="$archive_dir/$file_name.$iext"
             xfce4-screenshooter -r -s "$file_path"
@@ -173,8 +148,7 @@ for i in "$@"; do
 
         ;;
         -e|--edit)
-            # TODO: open file in editor (gimp) first to allow for blocking out
-            # private information easily
+            edit_img=1
         ;;
         -t|--timestamp)
             if [ $add_ts -eq 0 ]; then
@@ -195,6 +169,10 @@ for i in "$@"; do
 done
 
 
+if [ $edit_img -eq 1 ]; then
+    gimp "$file_path" 2> /dev/null
+fi
+
 if [ $add_ts -eq 1 ]; then
     timestamp
 fi
@@ -202,7 +180,10 @@ fi
 if [ $share -eq 1 ]; then
     # if no file screenshot was cancelled
     if [ -e "$file_path" ]; then
-        upload_file_site
+        # upload file to site
+        if ! sharenix.py upload "$file_path"; then
+            exit "$?"
+        fi
     else
         sharenix.py notify "Screenshot Cancelled" "" 4000
     fi
