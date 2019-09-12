@@ -47,6 +47,7 @@ use File::Copy qw(move);
 use JSON::MaybeXS qw(decode_json);
 use List::Util qw(first);
 use Path::Tiny qw(path);
+use Encode qw(decode_utf8);
 
 binmode(STDOUT, ":utf8");
 binmode(STDIN, ":encoding(UTF-8)");
@@ -56,10 +57,10 @@ binmode(STDIN, ":encoding(UTF-8)");
 # constants
 use constant {
     VERSION_STRING => '0.0.1-alpha',
-    UPLOADER => "$ARGV[0]",
-    META_DIR => "$ARGV[1]",
-    IN_DIR => "$ARGV[2]",
-    OUT_DIR => "$ARGV[3]"
+    UPLOADER => decode_utf8("$ARGV[0]"),
+    META_DIR => decode_utf8("$ARGV[1]"),
+    IN_DIR => decode_utf8("$ARGV[2]"),
+    OUT_DIR => decode_utf8("$ARGV[3]")
 };
 
 # -----------------------------------------------------------------------------
@@ -74,9 +75,10 @@ closedir($i_dir);
 
 foreach my $f (@m_files) {
     my $json = decode_json(path($f)->slurp);
-    if ($json->{uploader_id} eq UPLOADER) {
+    # TODO: make sure uploader_id exsists (in case of non youtube info files)
+    if (exists $json->{uploader_id} and $json->{uploader_id} eq UPLOADER) {
         my $bfn = substr(basename($f), 0, -10);
-        my $ftm = first { /^\Q$bfn\E\.(webm|mp4|mp3|mkv|ogg|ogv)$/ } @i_files;
+        my $ftm = decode_utf8(first { /^\Q$bfn\E\.(webm|mp4|mp3|mkv|ogg|ogv)$/ } @i_files);
         if (defined $ftm && -e IN_DIR . "/$ftm") {
             if (-e OUT_DIR . "/$ftm") {
                 print("WARNING: $ftm already exsists at ".OUT_DIR." file not moved.\n")
