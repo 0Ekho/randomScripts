@@ -54,7 +54,7 @@ timestamp()
     width=$(exiftool -b -ImageWidth "$file_path");
     # readable text wont fit on something too small so skip
     if (( height <= 25 )) || (( width <= 100 )); then
-        sharenix.py notify "Image too small for timestamp to be added." ""  2000
+        sharenix.py notify -t 2000 "Image too small for timestamp to be added." ""
     else
         # smaller images get a smaller font to make things fit better
         if (( height <= 250 )) || (( width <= 500 )); then
@@ -144,7 +144,7 @@ for i in "$@"; do
 
             xfce4-screenshooter -w -s "$file_path"
             echo -n "$file_path" | xclip -i -selection clipboard
-            sharenix.py notify "File saved to" "$file_path" 4000
+            sharenix.py notify -t 4000 "File saved to" "$file_path"
 
         ;;
         -e|--edit)
@@ -185,6 +185,6 @@ if [ $share -eq 1 ]; then
             exit "$?"
         fi
     else
-        sharenix.py notify "Screenshot Cancelled" "" 4000
+        sharenix.py notify -t 4000 "Screenshot Cancelled" ""
     fi
 fi

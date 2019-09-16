@@ -9,13 +9,15 @@
 
 # requires pycurl, python3-dbus, and xclip
 
+
+import argparse
 from datetime import datetime
 from io import BytesIO
 import json
 from os import path, environ
 import re
 from subprocess import Popen, PIPE, DEVNULL
-from sys import exit, argv
+from sys import exit
 import dbus
 import pycurl
 
@@ -112,19 +114,48 @@ def prog_notif(down_total, down, up_total, up):
            4000, prog_notif_id)
 
 
-# TODO: add checking to arguments
-if argv[1] == "upload":
+def run_upload(args):
     with open(path.join(main_dir, "apikey")) as a:
         apikey = a.readline().strip()
 
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    (errc, msg) = upload(argv[2], apikey)
+    (errc, msg) = upload(args.file, apikey)
     print(msg)
     with open(path.join(main_dir, "history.csv"), "a") as h:
-        h.write("{},{},{}\n".format(ts, path.abspath(argv[2]), msg))
+        h.write("{},{},{}\n".format(ts, path.abspath(args.file), msg))
 
     exit(errc)
-elif argv[1] == "notify":
-    notify(argv[2], argv[3], int(argv[4]), 0)
-else:
-    print("Unknown command:", argv[1])
+
+
+def run_shorten(args):
+    print("TODO:")
+
+
+def run_notify(args):
+    notify(args.title, args.body, args.t, 0)
+
+
+parser = argparse.ArgumentParser(description="File uploader and notifier")
+sub_par = parser.add_subparsers(dest='cmd')
+
+up = sub_par.add_parser('upload', help="Upload a file")
+up.add_argument('file', help="File to upload")
+up.set_defaults(func=run_upload)
+
+lp = sub_par.add_parser('shorten', help="Shorten a link")
+lp.add_argument('url', help="URL to shorten")
+lp.set_defaults(func=run_shorten)
+
+np = sub_par.add_parser(
+    'notify',
+    help="Send notification instead of uploading a file,"
+    + " this is for use in the capture script."
+)
+np.add_argument('-t', help="Time in milliseconds to display notification",
+                default=0, type=int)
+np.add_argument('title', help="Notification Title")
+np.add_argument('body', help="Notification body")
+np.set_defaults(func=run_notify)
+
+args = parser.parse_args()
+args.func(args)
