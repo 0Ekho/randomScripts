@@ -38,18 +38,12 @@ def notify(title, body, time, replace):
     return notif.Notify('sharenix.py', replace, '', title, body, '', '', time)
 
 
-def upload(fname, apikey):
-    # Edit URL and API param names for your host, comment out second POST param
-    # line if host is public upload
-    api_url = "https://x88.moe/api/v1/upload"
-    # api_url = "http://x88.devel/api/v1/upload"
-    api_param = {'file': "file", 'auth': "apikey"}
-
+def curl_call(api_url, api_param, payload, apikey, is_file, init_notif):
     # have to use globals because pycurl doesn't support XFERINFODATA() :/
     global prog_notif_fn
-    prog_notif_fn = fname
+    prog_notif_fn = payload
     global prog_notif_id
-    prog_notif_id = notify("Uploading: " + fname, "", 2000, 0)
+    prog_notif_id = notify(init_notif, "", 2000, 0)
 
     err_code = 0
     msg = ""
@@ -60,13 +54,17 @@ def upload(fname, apikey):
     c.setopt(c.WRITEDATA, buffer)
     c.setopt(c.URL, api_url)
     c.setopt(c.MAX_SEND_SPEED_LARGE, 4_000_000)  # NOTE: 4MB rate limit
+    if is_file:
+        c.setopt(c.NOPROGRESS, False)
+        c.setopt(c.XFERINFOFUNCTION, prog_notif)
+        # c.setopt(c.XFERINFODATA, (prog_notif_id, fname))
+        data_param = (api_param['data'], (c.FORM_FILE, payload))
+    else:
+        data_param = (api_param['data'], (c.FORM_BUFFERPTR, payload))
     c.setopt(c.HTTPPOST, [
-        (api_param['file'], (c.FORM_FILE, fname)),
+        data_param,
         (api_param['auth'], (c.FORM_BUFFERPTR, apikey)),
     ])
-    c.setopt(c.NOPROGRESS, False)
-    c.setopt(c.XFERINFOFUNCTION, prog_notif)
-    # c.setopt(c.XFERINFODATA, (prog_notif_id, fname))
 
     try:
         c.perform()
@@ -86,11 +84,17 @@ def upload(fname, apikey):
     if err_code:
         return (err_code, msg)
 
+    err_code = handle_resp(response)
+    return (err_code, msg)
+
+
+def handle_resp(response):
     resp = json.loads(response)
     if 'ok' in resp and 'url' in resp['ok']:
         notify("Upload Complete",
                "Link is: " + resp['ok']['url'] + "\nUrl copied to clipboard",
                4000, prog_notif_id)
+        # TODO: move clipboard to function
         p = Popen(['xclip', '-i', '-selection', 'clipboard', '-f'],
                   stdin=PIPE, stdout=DEVNULL)
         p.communicate(input=resp['ok']['url'].encode('utf-8'))
@@ -99,12 +103,12 @@ def upload(fname, apikey):
         p.communicate(input=resp['ok']['url'].encode('utf-8'))
     elif 'error' in resp:
         notify("Upload Failed", resp['error'], 4000, prog_notif_id)
-        err_code = 4
+        return 4
     else:
         notify("Unknown response", str(response), 4000, prog_notif_id)
-        err_code = 5
+        return 5
 
-    return (err_code, msg)
+    return 0
 
 
 def prog_notif(down_total, down, up_total, up):
@@ -115,11 +119,18 @@ def prog_notif(down_total, down, up_total, up):
 
 
 def run_upload(args):
+    # Edit URL and API param names for your host, comment out second POST param
+    # line if host is public upload
+    api_url = "https://x88.moe/api/v1/upload"
+    # api_url = "http://x88.devel/api/v1/upload"
+    api_param = {'data': "file", 'auth': "apikey"}
+
     with open(path.join(main_dir, "apikey")) as a:
         apikey = a.readline().strip()
 
     ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    (errc, msg) = upload(args.file, apikey)
+    (errc, msg) = curl_call(api_url, api_param, args.file, apikey, True,
+                            "Uploading: " + args.file)
     print(msg)
     with open(path.join(main_dir, "history.csv"), "a") as h:
         h.write("{},{},{}\n".format(ts, path.abspath(args.file), msg))
@@ -128,7 +139,23 @@ def run_upload(args):
 
 
 def run_shorten(args):
-    print("TODO:")
+    # Edit URL and API param names for your host, comment out second POST param
+    # line if host is public upload
+    api_url = "https://x88.moe/api/v1/makeshort"
+    # api_url = "http://x88.devel/api/v1/makeshort"
+    api_param = {'data': "link", 'auth': "apikey"}
+
+    with open(path.join(main_dir, "apikey")) as a:
+        apikey = a.readline().strip()
+
+    ts = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    (errc, msg) = curl_call(api_url, api_param, args.url, apikey, False,
+                            "Shortening Link ")
+    print(msg)
+    with open(path.join(main_dir, "history.csv"), "a") as h:
+        h.write("{},{},{}\n".format(ts, args.url, msg))
+
+    exit(errc)
 
 
 def run_notify(args):
