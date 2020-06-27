@@ -8,11 +8,21 @@
 # depends on ffmpeg, exiftool, and sharenix.py
 # (which needs python3-pycurl and python3-dbus and xclip)
 
-# also needs xfce4-screenshooter, or can uncomment xwd and use that instead 
-# (but area select will not work currently)
+# also needs scrot for taking the screenshots, or use tool of your choice
 
 # you will need to edit the curl commands in sharenix.py to work with your file
 # host of choice
+
+# use `capture.sh 'command "$file_path"' [flags]`
+# example `capture.sh 'scrot -u "$file_path"' -s`
+#
+# or `capture.sh 'xwd_window "$file_path"' -s` to use xwd to capture current
+# window, which does not merge composite windows
+# or `capture.sh 'scrot -u "$file_path" && gimp "$file_path"' -s` to edit the
+# image first (make sure to overwrite original when saving)
+#
+# first argument is command to eval for screenshot, with "$file_path" included
+# literally to the save path argument of your command
 
 set -euo pipefail
 IFS=$'\n\t'
@@ -32,7 +42,7 @@ fi
 count=$(cat "$main_dir/count")
 file_name="$(printf "SN_%07d" "$count")"
 ((count++))
-echo $count > "$main_dir/count"
+echo "$count" > "$main_dir/count"
 
 
 # mktemp but with file extensions, for ffmpeg format detection
@@ -83,72 +93,34 @@ timestamp()
     fi
 }
 
+# capture active window with xwd
+xwd_window() {
+    # pipes break ffmpeg with xwd unfortunatly
+    tf=$(mktemp "/tmp/snts_XXXXXXXX")
+    xwd -id "$(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2)"\
+     -out "$tf"
+    ffmpeg -hide_banner -v warning\
+     -f xwd_pipe -i "$tf" -vframes 1 "$1"
+    rm "$tf"
+}
+
 # -----------------------------------------------------------------------------
 
 share=0
-edit_img=0
-add_ts=0
 # flag may set negative to force disable timestamps if incompatable (such as if
 # it uses an existing file, which must not be modified)
+add_ts=0
 
 # parse the input
+file_path="$archive_dir/$file_name.$iext"
+screen_shot=$1
+shift 
+
 for i in "$@"; do
     case $i in
-        -a|--area|-r|--region)
-            file_path="$archive_dir/$file_name.$iext"
-            xfce4-screenshooter -r -s "$file_path"
-        ;;
-        -w|--window)
-            file_path="$archive_dir/$file_name.$iext"
-
-            # pipes break ffmpeg with xwd unfortunatly
-            #tf=$(mktemp "/tmp/snts_XXXXXXXX")
-            #xwd -id "$(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2)"\
-            # -out "$tf"
-            #ffmpeg -hide_banner -v warning\
-            # -f xwd_pipe -i "$tf" -vframes 1 "$file_path"
-            #rm "$tf"
-
-            xfce4-screenshooter -w -s "$file_path"
-        ;;
-        -f|--fullscreen)
-            file_path="$archive_dir/$file_name.$iext"
-
-            #tf=$(mktemp "/tmp/snts_XXXXXXXX")
-            #xwd -root -out "$tf"
-            #ffmpeg -hide_banner -v warning\
-            # -f xwd_pipe -i "$tf" -vframes 1 "$file_path"
-            #rm "$tf"
-
-            xfce4-screenshooter -f -s "$file_path"
-
-            # fix error caused by different sized screens, you shouldn't need
-            # this
-            tf=$(mktmp "/tmp/snts_XXXXXXXX" "$iext")
-            mv "$file_path" "$tf"
-            ffmpeg -hide_banner -v warning -i "$tf"\
-             -vf drawbox=5760:0:1440:180:0x090909:t=fill -vframes 1 -y\
-             "$file_path"
-            rm "$tf"
-        ;;
         -h|--tmp-capture)
             rand=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
             file_path="/tmp/tc_$rand.$iext"
-
-            #tf=$(mktemp "/tmp/snts_XXXXXXXX")
-            #xwd -id "$(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2)"\
-            # -out "$tf"
-            #ffmpeg -hide_banner -v warning\
-            # -f xwd_pipe -i "$tf" -vframes 1 "$file_path"
-            #rm "$tf"
-
-            xfce4-screenshooter -w -s "$file_path"
-            echo -n "$file_path" | xclip -i -selection clipboard
-            sharenix.py notify -t 4000 "File saved to" "$file_path"
-
-        ;;
-        -e|--edit)
-            edit_img=1
         ;;
         -t|--timestamp)
             if [ $add_ts -eq 0 ]; then
@@ -168,10 +140,9 @@ for i in "$@"; do
     esac
 done
 
-
-if [ $edit_img -eq 1 ]; then
-    gimp "$file_path" 2> /dev/null
-fi
+# actually take screen shot
+eval "$screen_shot"
+# ---------
 
 if [ $add_ts -eq 1 ]; then
     timestamp
@@ -187,4 +158,7 @@ if [ $share -eq 1 ]; then
     else
         sharenix.py notify -t 4000 "Screenshot Cancelled" ""
     fi
+else
+    echo -n "$file_path" | xclip -i -selection clipboard
+    sharenix.py notify -t 4000 "File saved to" "$file_path"
 fi
