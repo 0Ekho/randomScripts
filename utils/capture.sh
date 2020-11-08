@@ -4,7 +4,7 @@
 # Copyright (c) 2019 Ekho <ekho@ekho.email>
 
 # Simple script for capturing screenshots and uploading them or another file
-# to a simple file hosting site. 
+# to a simple file hosting site.
 # depends on ffmpeg, exiftool, and sharenix.py
 # (which needs python3-pycurl and python3-dbus and xclip)
 
@@ -34,18 +34,7 @@ archive_dir="$main_dir/archive"
 # use PNG for images
 iext='png'
 
-# WARNING, deleting this file will cause the couter to reset and new
-# files to overwrite the old ones.
-if [ ! -f "$main_dir/count" ]; then
-    echo "0" > "$main_dir/count"
-fi
-count=$(cat "$main_dir/count")
-file_name="$(printf "SN_%07d" "$count")"
-((count++))
-echo "$count" > "$main_dir/count"
-
-
-# mktemp but with file extensions, for ffmpeg format detection
+# mktemp but with file extensions, for ffmpeg, etc. format detection
 mktmp()
 {
     mktf=$(mktemp "$1")
@@ -95,7 +84,7 @@ timestamp()
 
 # capture active window with xwd
 xwd_window() {
-    # pipes break ffmpeg with xwd unfortunatly
+    # pipes break ffmpeg with xwd unfortunately
     tf=$(mktemp "/tmp/snts_XXXXXXXX")
     xwd -id "$(xprop -root 32x '\t$0' _NET_ACTIVE_WINDOW | cut -f 2)"\
      -out "$tf"
@@ -109,18 +98,28 @@ xwd_window() {
 share=0
 # flag may set negative to force disable timestamps if incompatable (such as if
 # it uses an existing file, which must not be modified)
-add_ts=0
+add_ts=0 # currently useless as now the actual screenshot command is unknown
 
 # parse the input
+file_name="$(date '+SN_%s')"
 file_path="$archive_dir/$file_name.$iext"
+if [ -f "$file_path" ]; then
+    # try to avoid overwriting / erroring on existing files
+    # still can race and unlikely to help much if screen_shot takes a long time
+    # before creating the file, add nanoseconds to timestamp to get reliability
+    # (eg. interactive selection, don't screenshot taking a screenshot)
+    # even if screen_shot avoids overwrites in the case a race occurs,
+    # if share is set the wrong (old, existing file) will be uploaded
+    file_name="$(mktemp "${file_name}_XXXXXXXX")"
+    file_path="$archive_dir/$file_name.$iext"
+fi
 screen_shot=$1
-shift 
+shift
 
 for i in "$@"; do
     case $i in
         -h|--tmp-capture)
-            rand=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 4)
-            file_path="/tmp/tc_$rand.$iext"
+            file_path="$(mktemp -u "/tmp/tc_XXXX").$iext"
         ;;
         -t|--timestamp)
             if [ $add_ts -eq 0 ]; then
